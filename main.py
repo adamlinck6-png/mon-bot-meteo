@@ -12,13 +12,16 @@ CHAT_ID_TELEGRAM = "7518104464"
 LATITUDE = "48.7667"
 LONGITUDE = "7.2833"
 
+# Variable globale pour le suivi de ton IP internet
+VOTRE_IP_PUBLIQUE = "AUTO"
+
 # --- MINI SERVEUR WEB (POUR RENDER) ---
 class WebServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"Bot Meteo et Reseaux operationnel !")
+        self.wfile.write(b"Bot Meteo, Cyber et Reseaux operationnel !")
 
     def do_HEAD(self):
         self.send_response(200)
@@ -123,7 +126,6 @@ def verifier_meteo():
     return alertes
 
 # --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
-# --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
 def verifier_failles_cyber():
     alertes = []
     systemes = ["linux", "ios", "windows"]
@@ -135,8 +137,8 @@ def verifier_failles_cyber():
             
             if isinstance(reponse, list) and len(reponse) > 0:
                 derniere_cve = reponse[0]
-                cve_id =应用_id = derniere_cve.get("id", "Inconnu")
-                description = "" + derniere_cve.get("summary", "Pas de description disponible.")
+                cve_id =  derniere_cve.get("id", "Inconnu")
+                description = derniere_cve.get("summary", "Pas de description disponible.")
                 
                 alertes.append(f"🛡️ **VEILLE CYBER - {os_name.upper()}**\n"
                                f"🪲 Dernière Faille : `{cve_id}`\n"
@@ -147,9 +149,41 @@ def verifier_failles_cyber():
             
     return alertes
 
+# --- 5. DETECTEUR DE COUPURE DE COURANT / INTERNET ---
+def verifier_coupure_maison():
+    global VOTRE_IP_PUBLIQUE
+    alertes = []
+    
+    if VOTRE_IP_PUBLIQUE == "AUTO":
+        try:
+            VOTRE_IP_PUBLIQUE = requests.get("https://api.ipify.org", timeout=5).text
+            print(f"🏠 Adresse IP de ta box détectée : {VOTRE_IP_PUBLIQUE}")
+        except Exception as e:
+            print(f"Impossible de détecter ton IP publique : {e}")
+            return alertes
+
+    box_en_ligne = False
+    for essai in range(3):
+        try:
+            # On tente une requête rapide sur l'IP publique de ta box
+            reponse = requests.get(f"http://{VOTRE_IP_PUBLIQUE}", timeout=4)
+            box_en_ligne = True
+            break
+        except requests.exceptions.ConnectionError:
+            # Même si la box refuse la connexion HTTP, le fait qu'elle réponde prouve qu'elle est allumée
+            box_en_ligne = True
+            break
+        except requests.exceptions.Timeout:
+            time.sleep(2)
+            
+    if not box_en_ligne:
+        alertes.append("🔌 **ALERTE COUPURE à Danne :** Ta box internet ne répond plus ! Coupure de courant ou panne Internet suspectée chez toi. ⚠️")
+        
+    return alertes
+
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
-    print("🤖 Boucle globale démarrée (Réseaux + Météo de Danne + Cyber)...")
+    print("🤖 Boucle globale démarrée (Réseaux + Météo de Danne + Cyber + Courant)...")
     
     while True:
         try:
@@ -173,6 +207,12 @@ def boucle_du_bot():
             print("🔍 Vérification des failles de sécurité...")
             alertes_cyber = verifier_failles_cyber()
             for alerte in alertes_cyber:
+                envoyer_alerte_telegram(alerte)
+                
+            # 5. Check Coupure Courant / Box
+            print("🔍 Vérification de la connexion de la maison...")
+            alertes_courant = verifier_coupure_maison()
+            for alerte in alertes_courant:
                 envoyer_alerte_telegram(alerte)
                 
         except Exception as e:
