@@ -51,25 +51,63 @@ def envoyer_alerte_telegram(message):
     except Exception as e:
         print(f"Erreur envoi Telegram : {e}")
 
+def verifier_meteo():
+    alertes = []
+    
+    # Remplace ici par tes coordonnées si besoin (ex: latitude=48.8566&longitude=2.3522 pour Paris)
+    url = "https://api.open-meteo.com/v1/forecast?latitude=48.8566&longitude=2.3522&current=weather_code,wind_speed_10m"
+    
+    try:
+        reponse = requests.get(url, timeout=5).json()
+        actuel = reponse.get("current", {})
+        
+        code_meteo = actuel.get("weather_code", 0)
+        vent = actuel.get("wind_speed_10m", 0)
+        
+        # Détection des orages (Codes WMO 95, 96, 99)
+        if code_meteo in [95, 96, 99]:
+            alertes.append("⚡ **ALERTE ORAGE :** Attention, de l'orage et des impacts de foudre sont détectés !")
+            
+        # Détection des pluies fortes / averses (Codes WMO 63, 65, 81, 82)
+        elif code_meteo in [63, 65, 81, 82]:
+            alertes.append("🌧️ **ALERTE PLUIE :** Une forte averse ou une pluie battante est en cours !")
+            
+        # Détection de tempête (Vent supérieur à 70 km/h)
+        if vent >= 70:
+            alertes.append(f"💨 **ALERTE TEMPÊTE :** Grosses rafales de vent détectées ({vent} km/h) !")
+            
+    except Exception as e:
+        print(f"Erreur lors du check météo : {e}")
+        
+    return alertes
+
 def boucle_du_bot():
-    print("🤖 Boucle du Bot Météo démarrée...")
+    print("🤖 Boucle globale démarrée (Réseaux Sociaux + Météo d'Extrême)...")
+    
     while True:
         try:
+            # 1. Infos météo classiques dans la console (pas de spam Telegram)
             temp, vent = obtenir_meteo()
-            print(f"Vérification météo : {temp}°C, vent {vent} km/h.")
+            print(f"📊 Météo actuelle : {temp}°C | Vent : {vent} km/h")
             
-            # Seuil d'alerte : moins de 10°C OU plus de 15km/h de vent
-            if vent > 15 or temp < 10:
-                message_alerte = f"⚠️ ALERTE MÉTÉO ! ⚠️\n\nIl fait actuellement {temp}°C.\nLe vent souffle à {vent} km/h.\n\nPrépare la veste, ça caille ou ça souffle !"
-                envoyer_alerte_telegram(message_alerte)
-                print("📨 Alerte envoyée sur Telegram !")
+            # 2. SURVEILLANCE DES RÉSEAUX SOCIAUX
+            print("🔍 Vérification des réseaux sociaux...")
+            pannes = verifier_pannes()
+            for alerte in pannes:
+                envoyer_alerte_telegram(alerte)
+                
+            # 3. SURVEILLANCE DE LA MÉTÉO D'EXTRÊME (Orages, Tempêtes, Pluies fortes)
+            print("🔍 Vérification des alertes météo critiques...")
+            alertes_meteo = verifier_meteo()
+            for alerte in alertes_meteo:
+                envoyer_alerte_telegram(alerte)
                 
         except Exception as e:
-            print(f"Erreur dans la boucle météo : {e}")
+            print(f"❌ Erreur dans la boucle générale : {e}")
             
-        # Pause stricte de 1 heure (3600 secondes)
-        print("💤 Pause de 1 heure avant la prochaine vérification...")
-        time.sleep(3600)
+        # 4. On vérifie toutes les 10 minutes (600 secondes) pour être super réactif !
+        print("💤 Pause de 10 minutes avant le prochain contrôle...")
+        time.sleep(600)
 
 if __name__ == "__main__":
     # 1. On lance la boucle du bot dans son propre Thread isolé
