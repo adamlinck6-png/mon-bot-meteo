@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # --- CONFIGURATION ---
 TOKEN_TELEGRAM = "8720086632:AAHdZD6x5aL4fWB0h7dfIZ8P_6En4EN5rFg"
-CHAT_ID_TELEGRAM = "TON_CHAT_ID_ICI"  # <--- METS TES CHIFFRES ICI !
+CHAT_ID_TELEGRAM = "7518104464"  # <--- METS TES CHIFFRES ICI !
 
 LATITUDE = "48.76"
 LONGITUDE = "7.25"
@@ -19,8 +19,15 @@ class WebServerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot Meteo operationnel et isole !")
 
+    # AJOUT ICI : Répondre aussi aux requêtes 'HEAD' pour éviter l'erreur 501
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
 def lancer_serveur_web():
-    port = int(os.environ.get("PORT", 8080))
+    # MODIFICATION ICI : On force le port 10000 par défaut si Render ne donne rien
+    port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), WebServerHandler)
     print(f"🌍 Serveur web actif sur le port {port}")
     server.serve_forever()
