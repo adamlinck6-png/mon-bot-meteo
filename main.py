@@ -99,7 +99,6 @@ def obtenir_meteo():
 # --- 3. DÉTECTEUR MÉTÉO CRITIQUE (TELEGRAM) ---
 def verifier_meteo():
     alertes = []
-    # L'URL utilise maintenant tes variables globales configurées en haut !
     url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current=weather_code,wind_speed_10m"
     
     try:
@@ -123,9 +122,33 @@ def verifier_meteo():
         
     return alertes
 
+# --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
+def verifier_failles_cyber():
+    alertes = []
+    systemes = ["linux", "ios", "windows"]
+    
+    for os_name in systemes:
+        try:
+            url = f"https://cve.circl.lu/api/search/{os_name}"
+            reponse = requests.get(url, timeout=5).json()
+            
+            if isinstance(reponse, list) and len(reponse) > 0:
+                derniere_cve = reponse[0]
+                cve_id = {{derniere_cve.get("id", "Inconnu")}}
+                description = {{derniere_cve.get("summary", "Pas de description disponible.")}}
+                
+                alertes.append(f"🛡️ **VEILLE CYBER - {os_name.upper()}**\n"
+                               f"🪲 Dernière Faille : `{cve_id}`\n"
+                               f"📝 Infos : {description[:150]}...")
+                               
+        except Exception as e:
+            print(f"Impossible de checker les failles pour {os_name} : {e}")
+            
+    return alertes
+
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
-    print("🤖 Boucle globale démarrée (Réseaux Sociaux + Météo de Danne)...")
+    print("🤖 Boucle globale démarrée (Réseaux + Météo de Danne + Cyber)...")
     
     while True:
         try:
@@ -143,6 +166,12 @@ def boucle_du_bot():
             print("🔍 Vérification des alertes météo...")
             alertes_meteo = verifier_meteo()
             for alerte in alertes_meteo:
+                envoyer_alerte_telegram(alerte)
+                
+            # 4. Check Failles Cyber
+            print("🔍 Vérification des failles de sécurité...")
+            alertes_cyber = verifier_failles_cyber()
+            for alerte in alertes_cyber:
                 envoyer_alerte_telegram(alerte)
                 
         except Exception as e:
