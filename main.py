@@ -123,6 +123,7 @@ def verifier_meteo():
     return alertes
 
 # --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
+# --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
 def verifier_failles_cyber():
     alertes = []
     systemes = ["linux", "ios", "windows"]
@@ -134,8 +135,8 @@ def verifier_failles_cyber():
             
             if isinstance(reponse, list) and len(reponse) > 0:
                 derniere_cve = reponse[0]
-                cve_id = {{derniere_cve.get("id", "Inconnu")}}
-                description = {{derniere_cve.get("summary", "Pas de description disponible.")}}
+                cve_id =应用_id = derniere_cve.get("id", "Inconnu")
+                description = "" + derniere_cve.get("summary", "Pas de description disponible.")
                 
                 alertes.append(f"🛡️ **VEILLE CYBER - {os_name.upper()}**\n"
                                f"🪲 Dernière Faille : `{cve_id}`\n"
