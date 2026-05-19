@@ -43,7 +43,7 @@ def obtenir_meteo():
 def envoyer_alerte_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
     payload = {
-        "chat_id": CHAT_ID_TELEGRAM,
+        "chat_id": 7518104464,
         "text": message
     }
     try:
