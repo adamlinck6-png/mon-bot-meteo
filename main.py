@@ -2,6 +2,7 @@ import requests
 import time
 import threading
 import os
+import datetime  # Ajouté pour la gestion de l'heure
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # --- CONFIGURATION ---
@@ -46,10 +47,26 @@ def envoyer_alerte_telegram(message):
     except Exception as e:
         print(f"Erreur envoi Telegram : {e}")
 
+# --- RAPPORT MATIN ---
+def obtenir_bulletin_matin():
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&daily=weather_code,temperature_2m_max&timezone=Europe%2FParis"
+    try:
+        data = requests.get(url, timeout=5).json()
+        code = data["daily"]["weather_code"][0]
+        temp_max = data["daily"]["temperature_2m_max"][0]
+        
+        etat = "avec un ciel mitigé"
+        if code == 0: etat = "sous un grand soleil"
+        elif code in [1, 2]: etat = "avec quelques passages nuageux"
+        elif code >= 60: etat = "avec de la pluie probable"
+            
+        return f"☀️ **Bonjour de Danne !**\n\nPrévisions du jour : {etat}. Température max prévue : {temp_max}°C. Passe une excellente journée ! 🚀"
+    except:
+        return "Impossible de récupérer la météo du matin."
+
 # --- 1. DETECTEUR DE PANNES RÉSEAUX ---
 def verifier_pannes():
     alertes = []
-
     # Check Discord
     try:
         url_discord = "https://discordstatus.com/api/v2/summary.json"
@@ -59,33 +76,15 @@ def verifier_pannes():
             alertes.append(f"🔴 **Discord est en panne !**\nStatut : {statut_discord}")
     except:
         print("Impossible de joindre le statut de Discord")
-
     # Check YouTube
     try:
         url_youtube = "https://www.google.com/appsstatus/dashboard/summary.json"
         data_youtube = requests.get(url_youtube, timeout=5).json()
         for service in data_youtube.get("services", []):
-            if service["name"] == "YouTube":
-                if service["status"] != "AVAILABLE":
-                    alertes.append("🔴 **YouTube rencontre des perturbations mondiales !**")
+            if service["name"] == "YouTube" and service["status"] != "AVAILABLE":
+                alertes.append("🔴 **YouTube rencontre des perturbations mondiales !**")
     except:
         print("Impossible de joindre le statut de YouTube")
-
-    # Check des autres réseaux
-    autres_sites = {
-        "Instagram": "https://www.instagram.com",
-        "Twitter/X": "https://twitter.com",
-        "Twitch": "https://www.twitch.tv"
-    }
-
-    for nom_site, url in autres_sites.items():
-        try:
-            reponse = requests.get(url, timeout=5)
-            if reponse.status_code >= 400:
-                alertes.append(f"⚠️ **{nom_site} semble rencontrer un problème !** (Code : {reponse.status_code})")
-        except:
-            alertes.append(f"🚨 **Alerte Critique : {nom_site} est totalement inaccessible !**")
-
     return alertes
 
 # --- 2. DÉTECTEUR MÉTÉO ACTUELLE (CONSOLE) ---
@@ -93,9 +92,7 @@ def obtenir_meteo():
     url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current_weather=true"
     try:
         reponse = requests.get(url, timeout=5).json()
-        temperature = reponse["current_weather"]["temperature"]
-        vitesse_vent = reponse["current_weather"]["windspeed"]
-        return temperature, vitesse_vent
+        return reponse["current_weather"]["temperature"], reponse["current_weather"]["windspeed"]
     except:
         return "N/A", "N/A"
 
@@ -103,126 +100,71 @@ def obtenir_meteo():
 def verifier_meteo():
     alertes = []
     url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current=weather_code,wind_speed_10m"
-    
     try:
         reponse = requests.get(url, timeout=5).json()
         actuel = reponse.get("current", {})
         code_meteo = actuel.get("weather_code", 0)
         vent = actuel.get("wind_speed_10m", 0)
-        
-        # Orages
         if code_meteo in [95, 96, 99]:
-            alertes.append("⚡ **ALERTE ORAGE à Danne :** Attention, de l'orage et des impacts de foudre sont détectés !")
-        # Pluies fortes
+            alertes.append("⚡ **ALERTE ORAGE à Danne :** Impacts de foudre détectés !")
         elif code_meteo in [63, 65, 81, 82]:
-            alertes.append("🌧️ **ALERTE PLUIE à Danne :** Une forte averse ou une pluie battante est en cours !")
-        # Tempête
+            alertes.append("🌧️ **ALERTE PLUIE à Danne :** Forte averse en cours !")
         if vent >= 70:
-            alertes.append(f"💨 **ALERTE TEMPÊTE à Danne :** Grosses rafales de vent détectées ({vent} km/h) !")
-            
-    except Exception as e:
-        print(f"Erreur lors du check météo : {e}")
-        
+            alertes.append(f"💨 **ALERTE TEMPÊTE à Danne :** Rafales de vent ({vent} km/h) !")
+    except:
+        pass
     return alertes
 
 # --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
 def verifier_failles_cyber():
     alertes = []
-    systemes = ["linux", "ios", "windows"]
-    
-    for os_name in systemes:
+    for os_name in ["linux", "ios", "windows"]:
         try:
             url = f"https://cve.circl.lu/api/search/{os_name}"
             reponse = requests.get(url, timeout=5).json()
-            
             if isinstance(reponse, list) and len(reponse) > 0:
                 derniere_cve = reponse[0]
-                cve_id =  derniere_cve.get("id", "Inconnu")
-                description = derniere_cve.get("summary", "Pas de description disponible.")
-                
-                alertes.append(f"🛡️ **VEILLE CYBER - {os_name.upper()}**\n"
-                               f"🪲 Dernière Faille : `{cve_id}`\n"
-                               f"📝 Infos : {description[:150]}...")
-                               
-        except Exception as e:
-            print(f"Impossible de checker les failles pour {os_name} : {e}")
-            
+                alertes.append(f"🛡️ **VEILLE CYBER - {os_name.upper()}**\n🪲 Faille : `{derniere_cve.get('id')}`\n📝 {derniere_cve.get('summary')[:150]}...")
+        except:
+            pass
     return alertes
 
-# --- 5. DETECTEUR DE COUPURE DE COURANT / INTERNET ---
+# --- 5. DETECTEUR DE COUPURE ---
 def verifier_coupure_maison():
     global VOTRE_IP_PUBLIQUE
-    alertes = []
-    
     if VOTRE_IP_PUBLIQUE == "AUTO":
-        try:
-            VOTRE_IP_PUBLIQUE = requests.get("https://api.ipify.org", timeout=5).text
-            print(f"🏠 Adresse IP de ta box détectée : {VOTRE_IP_PUBLIQUE}")
-        except Exception as e:
-            print(f"Impossible de détecter ton IP publique : {e}")
-            return alertes
-
-    box_en_ligne = False
-    for essai in range(3):
-        try:
-            # On tente une requête rapide sur l'IP publique de ta box
-            reponse = requests.get(f"http://{VOTRE_IP_PUBLIQUE}", timeout=4)
-            box_en_ligne = True
-            break
-        except requests.exceptions.ConnectionError:
-            # Même si la box refuse la connexion HTTP, le fait qu'elle réponde prouve qu'elle est allumée
-            box_en_ligne = True
-            break
-        except requests.exceptions.Timeout:
-            time.sleep(2)
-            
-    if not box_en_ligne:
-        alertes.append("🔌 **ALERTE COUPURE à Danne :** Ta box internet ne répond plus ! Coupure de courant ou panne Internet suspectée chez toi. ⚠️")
-        
-    return alertes
+        try: VOTRE_IP_PUBLIQUE = requests.get("https://api.ipify.org", timeout=5).text
+        except: return []
+    try:
+        requests.get(f"http://{VOTRE_IP_PUBLIQUE}", timeout=4)
+        return []
+    except:
+        return ["🔌 **ALERTE COUPURE à Danne :** Ta box internet ne répond plus !"]
 
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
-    print("🤖 Boucle globale démarrée (Réseaux + Météo de Danne + Cyber + Courant)...")
+    print("🤖 Boucle globale démarrée...")
+    deja_envoye_matin = False
     
     while True:
+        heure_actuelle = datetime.datetime.now().hour
+        
+        # Rapport du matin à 8h
+        if heure_actuelle == 8 and not deja_envoye_matin:
+            envoyer_alerte_telegram(obtenir_bulletin_matin())
+            deja_envoye_matin = True
+        elif heure_actuelle == 9:
+            deja_envoye_matin = False
+            
         try:
-            # 1. Stats dans la console
-            temp, vent = obtenir_meteo()
-            print(f"📊 Météo actuelle : {temp}°C | Vent : {vent} km/h")
-            
-            # 2. Check Réseaux Sociaux
-            print("🔍 Vérification des réseaux sociaux...")
-            pannes = verifier_pannes()
-            for alerte in pannes:
+            # Exécute tous les checks
+            for alerte in verifier_pannes() + verifier_meteo() + verifier_failles_cyber() + verifier_coupure_maison():
                 envoyer_alerte_telegram(alerte)
-                
-            # 3. Check Météo d'Extrême
-            print("🔍 Vérification des alertes météo...")
-            alertes_meteo = verifier_meteo()
-            for alerte in alertes_meteo:
-                envoyer_alerte_telegram(alerte)
-                
-            # 4. Check Failles Cyber
-            print("🔍 Vérification des failles de sécurité...")
-            alertes_cyber = verifier_failles_cyber()
-            for alerte in alertes_cyber:
-                envoyer_alerte_telegram(alerte)
-                
-            # 5. Check Coupure Courant / Box
-            print("🔍 Vérification de la connexion de la maison...")
-            alertes_courant = verifier_coupure_maison()
-            for alerte in alertes_courant:
-                envoyer_alerte_telegram(alerte)
-                
         except Exception as e:
-            print(f"❌ Erreur dans la boucle : {e}")
+            print(f"Erreur boucle : {e}")
             
-        print("💤 Pause de 10 minutes avant le prochain contrôle...")
         time.sleep(600)
 
 if __name__ == "__main__":
-    thread_bot = threading.Thread(target=boucle_du_bot, daemon=True)
-    thread_bot.start()
-    
+    threading.Thread(target=boucle_du_bot, daemon=True).start()
     lancer_serveur_web()
