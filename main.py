@@ -129,17 +129,26 @@ def verifier_failles_cyber():
             pass
     return alertes
 
-# --- 5. DETECTEUR DE COUPURE ---
+# --- VERSION AMÉLIORÉE (PLUS TOLÉRANTE) ---
 def verifier_coupure_maison():
     global VOTRE_IP_PUBLIQUE
+    
     if VOTRE_IP_PUBLIQUE == "AUTO":
-        try: VOTRE_IP_PUBLIQUE = requests.get("https://api.ipify.org", timeout=5).text
-        except: return []
-    try:
-        requests.get(f"http://{VOTRE_IP_PUBLIQUE}", timeout=4)
-        return []
-    except:
-        return ["🔌 **ALERTE COUPURE à Danne :** Ta box internet ne répond plus !"]
+        try:
+            VOTRE_IP_PUBLIQUE = requests.get("https://api.ipify.org", timeout=10).text
+        except:
+            return [] # On ne peut même pas trouver l'IP, on attend le prochain cycle
+
+    # On fait 3 essais avec plus de temps (7 secondes au lieu de 4)
+    for essai in range(3):
+        try:
+            requests.get(f"http://{VOTRE_IP_PUBLIQUE}", timeout=7)
+            return [] # La box a répondu, tout est OK !
+        except:
+            time.sleep(3) # On attend 3 secondes avant de ré-essayer
+            
+    # Si après 3 essais on n'a toujours rien, ALORS c'est une vraie panne
+    return ["🔌 **ALERTE COUPURE à Danne :** Ta box ne répond plus après 3 tentatives. Vérifie ton courant ou ta connexion ! ⚠️"]
 
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
