@@ -153,20 +153,23 @@ def verifier_coupure_maison():
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
     print("🤖 Boucle globale démarrée...")
-    deja_envoye_matin = False
+    date_derniere_alerte = None # On mémorise le jour, c'est plus fiable
     
     while True:
-        heure_actuelle = datetime.datetime.now().hour
+        # On force le fuseau horaire de la France (UTC+2)
+        paris_tz = datetime.timezone(datetime.timedelta(hours=2))
+        maintenant = datetime.datetime.now(paris_tz)
         
-        # Rapport du matin à 8h
-        if heure_actuelle == 8 and not deja_envoye_matin:
+        heure_actuelle = maintenant.hour
+        date_actuelle = maintenant.date()
+        
+        # Rapport du matin à 8h (heure française garantie)
+        if heure_actuelle == 8 and date_derniere_alerte != date_actuelle:
             envoyer_alerte_telegram(obtenir_bulletin_matin())
-            deja_envoye_matin = True
-        elif heure_actuelle == 9:
-            deja_envoye_matin = False
+            date_derniere_alerte = date_actuelle # Marqué comme envoyé pour aujourd'hui
             
         try:
-            # Exécute tous les checks
+            # Exécute tous les checks (Réseaux, Météo, Cyber, Box)
             for alerte in verifier_pannes() + verifier_meteo() + verifier_failles_cyber() + verifier_coupure_maison():
                 envoyer_alerte_telegram(alerte)
         except Exception as e:
