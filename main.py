@@ -144,8 +144,8 @@ def boucle_du_bot():
         heure_actuelle = maintenant.hour
         date_actuelle = maintenant.date()
         
-        # Rapport du matin à 8h (heure française garantie)
-        if heure_actuelle == 8 and date_derniere_alerte != date_actuelle:
+        # Rapport du matin à 7h (heure française garantie)
+        if heure_actuelle == 7 and date_derniere_alerte != date_actuelle:
             envoyer_alerte_telegram(obtenir_bulletin_matin())
             date_derniere_alerte = date_actuelle # Marqué comme envoyé pour aujourd'hui
             
