@@ -99,21 +99,25 @@ def obtenir_meteo():
 # --- 3. DÉTECTEUR MÉTÉO CRITIQUE (TELEGRAM) ---
 def verifier_meteo():
     alertes = []
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current=weather_code,wind_speed_10m"
+    # On ajoute temperature_2m dans l'API pour surveiller la chaleur
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current=weather_code,wind_speed_10m,temperature_2m"
     try:
         reponse = requests.get(url, timeout=5).json()
         actuel = reponse.get("current", {})
         code_meteo = actuel.get("weather_code", 0)
         vent = actuel.get("wind_speed_10m", 0)
+        temperature = actuel.get("temperature_2m", None) # On extrait la température
+        
         if code_meteo in [95, 96, 99]:
             alertes.append("⚡ **ALERTE ORAGE à Danne :** Impacts de foudre détectés !")
         elif code_meteo in [63, 65, 81, 82]:
             alertes.append("🌧️ **ALERTE PLUIE à Danne :** Forte averse en cours !")
         if vent >= 70:
             alertes.append(f"💨 **ALERTE TEMPÊTE à Danne :** Rafales de vent ({vent} km/h) !")
+            
+        return alertes, temperature # On renvoie la liste d'alertes ET la température actuelle
     except:
-        pass
-    return alertes
+        return alertes, None
 
 # --- 4. DETECTEUR DE FAILLES DE SÉCURITÉ ---
 def verifier_failles_cyber():
@@ -153,7 +157,8 @@ def verifier_coupure_maison():
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
     print("🤖 Boucle globale démarrée...")
-    date_derniere_alerte = None # On mémorise le jour, c'est plus fiable
+    date_derniere_alerte = None # Mémorise le jour pour le bulletin du matin
+    date_alerte_chaleur = None  # Mémorise le jour pour l'alerte chaleur (anti-spam)
     
     while True:
         # On force le fuseau horaire de la France (UTC+2)
@@ -169,14 +174,13 @@ def boucle_du_bot():
             date_derniere_alerte = date_actuelle # Marqué comme envoyé pour aujourd'hui
             
         try:
-            # Exécute tous les checks (Réseaux, Météo, Cyber, Box)
-            for alerte in verifier_pannes() + verifier_meteo() + verifier_failles_cyber() + verifier_coupure_maison():
-                envoyer_alerte_telegram(alerte)
-        except Exception as e:
-            print(f"Erreur boucle : {e}")
+            # On récupère les alertes météo de base et la température en temps réel
+            alertes_meteo, temp_actuelle = verifier_meteo()
             
-        time.sleep(600)
-
-if __name__ == "__main__":
-    threading.Thread(target=boucle_du_bot, daemon=True).start()
-    lancer_serveur_web()
+            # 🔥 Détecteur d'excès de chaleur (Seuil : 24°C)
+            if temp_actuelle and temp_actuelle >= 24.0 and date_alerte_chaleur != date_actuelle:
+                alertes_meteo.append(f"🔥 **ALERTE CHALEUR à Danne :** La barre des 24°C a été franchie ! Il fait actuellement {temp_actuelle}°C. ☀️")
+                date_alerte_chaleur = date_actuelle # Bloque l'alerte pour éviter le spam toutes les 10 min
+            
+            # Exécute tous les checks et regroupe les alertes
+            toutes_les_alertes = verifier_pannes() + alertes_meteo +
