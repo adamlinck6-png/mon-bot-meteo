@@ -157,7 +157,7 @@ def boucle_du_bot():
     date_alerte_chaleur = None  # Mémorise le jour pour l'alerte chaleur (anti-spam)
     
     # 📝 MODIFIE ICI : Mets ta vraie adresse email entre les guillemets !
-    EMAIL_A_PROTEGER = "ton_adresse_email@gmail.com" 
+    EMAIL_A_PROTEGER = "addm5196@gmail.com" 
     
     while True:
         # On force le fuseau horaire de la France (UTC+2)
