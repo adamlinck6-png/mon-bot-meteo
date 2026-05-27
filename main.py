@@ -3,6 +3,9 @@ import time
 import threading
 import os
 import datetime  # Ajouté pour la gestion de l'heure
+import imaplib
+import email
+from email.header import decode_header
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # --- CONFIGURATION ---
@@ -150,14 +153,60 @@ def verifier_fuites_email(email_a_surveiller):
         print(f"Erreur lors du check de fuite de données : {e}")
     return alertes
 
+# --- 6. GUETTEUR D'E-MAILS DE SÉCURITÉ (IMAP) ---
+def verifier_emails_securite(votre_email, mot_de_passe_app):
+    alertes = []
+    try:
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(votre_email, mot_de_passe_app)
+        mail.select("inbox")
+
+        mots_cles = ['security', 'connexion', 'password', 'code', 'securite', 'reinitialisation', 'suspect']
+        status, messages = mail.search(None, 'UNSEEN')
+        
+        if status == "OK":
+            liste_ids = messages[0].split()
+            for mail_id in liste_ids[-5:]:
+                status, data = mail.fetch(mail_id, '(RFC822)')
+                if status != "OK":
+                    continue
+                
+                raw_email = data[0][1]
+                msg = email.message_from_bytes(raw_email)
+                
+                sujet, encoding = decode_header(msg["Subject"])[0]
+                if isinstance(sujet, bytes):
+                    sujet = sujet.decode(encoding if encoding else 'utf-8', errors='ignore')
+                
+                sujet_lower = sujet.lower()
+                
+                if any(mc in sujet_lower for mc in mots_cles):
+                    expediteur, encoding = decode_header(msg["From"])[0]
+                    if isinstance(expediteur, bytes):
+                        expediteur = expediteur.decode(encoding if encoding else 'utf-8', errors='ignore')
+                        
+                    alertes.append(
+                        f"🔔 **GUETTEUR EMAIL - ALERTE SÉCURITÉ COMPTE !**\n\n"
+                        f"📧 **De :** {expediteur}\n"
+                        f"📌 **Sujet :** {sujet}\n"
+                        f"⚠️ *Un tiers essaie peut-être de forcer l'un de tes comptes (Discord, Google, Epic...), vérifie tes mails d'urgence !*"
+                    )
+        mail.logout()
+    except Exception as e:
+        print(f"Erreur guetteur IMAP : {e}")
+        
+    return alertes
+
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
     print("🤖 Boucle globale démarrée...")
     date_derniere_alerte = None # Mémorise le jour pour le bulletin du matin
     date_alerte_chaleur = None  # Mémorise le jour pour l'alerte chaleur (anti-spam)
     
-    # 📝 MODIFIE ICI : Mets ta vraie adresse email entre les guillemets !
+    # 📝 CONFIGURATION CYBER
     EMAIL_A_PROTEGER = "addm5196@gmail.com" 
+    # ⚠️ TON MOT DE PASSE D'APPLICATION À 16 CARACTÈRES COPIÉ-COLLÉ ICI :
+    MDP_APP_GMAIL = "kcxrplkogjfjygxh" 
     
     while True:
         # On force le fuseau horaire de la France (UTC+2)
@@ -169,15 +218,13 @@ def boucle_du_bot():
         
         # ⏰ Rapport du matin et check cyber-fuites à 7h00 pile !
         if heure_actuelle == 7 and date_derniere_alerte != date_actuelle:
-            # 1. Envoi de la météo du matin
             envoyer_alerte_telegram(obtenir_bulletin_matin())
             
-            # 2. Check des bases de piratages du Dark Web
             alertes_cyber_fuites = verifier_fuites_email(EMAIL_A_PROTEGER)
             for alerte in alertes_cyber_fuites:
                 envoyer_alerte_telegram(alerte)
                 
-            date_derniere_alerte = date_actuelle # Marqué comme envoyé pour aujourd'hui
+            date_derniere_alerte = date_actuelle
             
         try:
             # On récupère les alertes météo de base et la température en temps réel
@@ -186,10 +233,13 @@ def boucle_du_bot():
             # 🔥 Détecteur d'excès de chaleur (Seuil : 24°C)
             if temp_actuelle and temp_actuelle >= 24.0 and date_alerte_chaleur != date_actuelle:
                 alertes_meteo.append(f"🔥 **ALERTE CHALEUR à Danne :** La barre des 24°C a été franchie ! Il fait actuellement {temp_actuelle}°C. ☀️")
-                date_alerte_chaleur = date_actuelle # Bloque l'alerte pour éviter le spam toutes les 10 min
+                date_alerte_chaleur = date_actuelle
             
-            # Exécute tous les checks restants (Pannes + Météo + Cyber)
-            toutes_les_alertes = verifier_pannes() + alertes_meteo + verifier_failles_cyber()
+            # 📬 Check des e-mails de sécurité en temps réel
+            alertes_emails = verifier_emails_securite(EMAIL_A_PROTEGER, MDP_APP_GMAIL)
+            
+            # Exécute tous les checks restants (Pannes + Météo + Cyber CVE + Mails de sécu)
+            toutes_les_alertes = verifier_pannes() + alertes_meteo + verifier_failles_cyber() + alertes_emails
             
             for alerte in toutes_les_alertes:
                 envoyer_alerte_telegram(alerte)
