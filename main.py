@@ -96,14 +96,13 @@ def obtenir_meteo():
 # --- 3. DÉTECTEUR MÉTÉO CRITIQUE (TELEGRAM) ---
 def verifier_meteo():
     alertes = []
-    # On ajoute temperature_2m dans l'API pour surveiller la chaleur
     url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current=weather_code,wind_speed_10m,temperature_2m"
     try:
         reponse = requests.get(url, timeout=5).json()
         actuel = reponse.get("current", {})
         code_meteo = actuel.get("weather_code", 0)
         vent = actuel.get("wind_speed_10m", 0)
-        temperature = actuel.get("temperature_2m", None) # On extrait la température
+        temperature = actuel.get("temperature_2m", None)
         
         if code_meteo in [95, 96, 99]:
             alertes.append("⚡ **ALERTE ORAGE à Danne :** Impacts de foudre détectés !")
@@ -112,7 +111,7 @@ def verifier_meteo():
         if vent >= 70:
             alertes.append(f"💨 **ALERTE TEMPÊTE à Danne :** Rafales de vent ({vent} km/h) !")
             
-        return alertes, temperature # On renvoie la liste d'alertes ET la température actuelle
+        return alertes, temperature
     except:
         return alertes, None
 
@@ -130,11 +129,35 @@ def verifier_failles_cyber():
             pass
     return alertes
 
+# --- 5. DÉTECTEUR DE FUITES DE DONNÉES (DARK WEB) ---
+def verifier_fuites_email(email_a_surveiller):
+    alertes = []
+    url = f"https://leakcheck.io/api/public?check={email_a_surveiller}"
+    try:
+        reponse = requests.get(url, timeout=5).json()
+        if reponse.get("success") and reponse.get("sources"):
+            sources = reponse.get("sources", [])
+            nombre_fuites = len(sources)
+            dernières_sources = ", ".join(sources[:3])
+            
+            alertes.append(
+                f"⚠️ **ALERTE CYBER - FUITE DE DONNÉES DETECTÉE !**\n\n"
+                f"Ton adresse `{email_a_surveiller}` apparaît dans **{nombre_fuites}** fuites de données sur le web.\n"
+                f"📦 **Dernières sources connues :** {dernières_sources}\n\n"
+                f"💡 *Conseil : Si tu utilises le même mot de passe partout, change-le d'urgence !*"
+            )
+    except Exception as e:
+        print(f"Erreur lors du check de fuite de données : {e}")
+    return alertes
+
 # --- BOUCLE PRINCIPALE ---
 def boucle_du_bot():
     print("🤖 Boucle globale démarrée...")
     date_derniere_alerte = None # Mémorise le jour pour le bulletin du matin
     date_alerte_chaleur = None  # Mémorise le jour pour l'alerte chaleur (anti-spam)
+    
+    # 📝 MODIFIE ICI : Mets ta vraie adresse email entre les guillemets !
+    EMAIL_A_PROTEGER = "ton_adresse_email@gmail.com" 
     
     while True:
         # On force le fuseau horaire de la France (UTC+2)
@@ -144,9 +167,16 @@ def boucle_du_bot():
         heure_actuelle = maintenant.hour
         date_actuelle = maintenant.date()
         
-        # Rapport du matin à 7h (heure française garantie)
+        # ⏰ Rapport du matin et check cyber-fuites à 7h00 pile !
         if heure_actuelle == 7 and date_derniere_alerte != date_actuelle:
+            # 1. Envoi de la météo du matin
             envoyer_alerte_telegram(obtenir_bulletin_matin())
+            
+            # 2. Check des bases de piratages du Dark Web
+            alertes_cyber_fuites = verifier_fuites_email(EMAIL_A_PROTEGER)
+            for alerte in alertes_cyber_fuites:
+                envoyer_alerte_telegram(alerte)
+                
             date_derniere_alerte = date_actuelle # Marqué comme envoyé pour aujourd'hui
             
         try:
