@@ -161,7 +161,16 @@ def verifier_emails_securite(votre_email, mot_de_passe_app):
         mail.login(votre_email, mot_de_passe_app)
         mail.select("inbox")
 
-        mots_cles = ['security', 'connexion', 'password', 'code', 'securite', 'reinitialisation', 'suspect']
+        # Mots-clés beaucoup plus précis pour cibler les vraies alertes de sécurité
+        mots_cles_strictes = [
+            'security alert', 'alerte de securite', 'connexion suspecte', 
+            'suspicious login', 'reset your password', 'reinitialiser votre mot de passe',
+            'code de verification', 'verification code', 'confirmation code', '2fa'
+        ]
+        
+        # Liste des expéditeurs importants à surveiller en priorité (optionnel mais efficace)
+        services_clefs = ['google', 'discord', 'steam', 'epicgames', 'ea', 'microsoft', 'apple', 'telegram', 'render']
+
         status, messages = mail.search(None, 'UNSEEN')
         
         if status == "OK":
@@ -174,22 +183,29 @@ def verifier_emails_securite(votre_email, mot_de_passe_app):
                 raw_email = data[0][1]
                 msg = email.message_from_bytes(raw_email)
                 
+                # Récupération et décodage du sujet
                 sujet, encoding = decode_header(msg["Subject"])[0]
                 if isinstance(sujet, bytes):
                     sujet = sujet.decode(encoding if encoding else 'utf-8', errors='ignore')
-                
                 sujet_lower = sujet.lower()
                 
-                if any(mc in sujet_lower for mc in mots_cles):
-                    expediteur, encoding = decode_header(msg["From"])[0]
-                    if isinstance(expediteur, bytes):
-                        expediteur = expediteur.decode(encoding if encoding else 'utf-8', errors='ignore')
+                # Récupération et décodage de l'expéditeur
+                expediteur, encoding = decode_header(msg["From"])[0]
+                if isinstance(expediteur, bytes):
+                    expediteur = expediteur.decode(encoding if encoding else 'utf-8', errors='ignore')
+                expediteur_lower = expediteur.lower()
+                
+                # Condition de filtrage : il faut qu'un mot-clé strict soit présent
+                if any(mc in sujet_lower for mc in mots_cles_strictes):
+                    # Élimination des faux positifs connus (ex: newsletters Malwarebytes ou Gumroad)
+                    if "newsletter" in expediteur_lower or "creators.gumroad.com" in expediteur_lower:
+                        continue
                         
                     alertes.append(
                         f"🔔 **GUETTEUR EMAIL - ALERTE SÉCURITÉ COMPTE !**\n\n"
                         f"📧 **De :** {expediteur}\n"
                         f"📌 **Sujet :** {sujet}\n"
-                        f"⚠️ *Un tiers essaie peut-être de forcer l'un de tes comptes (Discord, Google, Epic...), vérifie tes mails d'urgence !*"
+                        f"⚠️ *Un tiers essaie peut-être de forcer l'un de tes comptes, vérifie tes mails d'urgence !*"
                     )
         mail.logout()
     except Exception as e:
